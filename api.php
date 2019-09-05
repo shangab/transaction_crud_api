@@ -318,10 +318,10 @@ if (stripos($_SERVER['REQUEST_URI'], 'localhost')!=="false") {
 } else {
     $api = new DbFactory(array(
         'dbengine'=>'MySQL',
-        'hostname'=>'79.170.40.244',
-        'username'=>'cl23-invsales',
-        'password'=>'krWqg3-ff',
-        'database'=>'cl23-invsales',
+        'hostname'=>'IPAddress',
+        'username'=>'username',
+        'password'=>'password',
+        'database'=>'database',
         'charset'=>'utf8mb4',
         'auth' =>false,
     ));
