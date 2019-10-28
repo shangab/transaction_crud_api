@@ -174,34 +174,33 @@ class MySQL implements DbInterface
             return true;
         }
     }
+    
     public function run()
     {
         if (!$this->auth()) {
             return;
         }
-        $operations = json_decode(file_get_contents('php://input'), true);
-        if (sizeof($operations) >1) {
+        $operationsraw= trim(file_get_contents('php://input'));
+        $operations = json_decode($operationsraw, true);
+        if (substr($operationsraw,0,1)==="["){
             foreach ($operations as $operation) {
-                $this->doOperation($operation);
+                $this->doOperation($operation, true);
             }
-        } else {
-            if (sizeof($operations)==1) {
-                $this->doOperation($operations[0]);
-            }
+        }else{
+            $this->doOperation($operations, false);
         }
-        
         $this->conn->close();
         echo json_encode($this->res);
     }
     
-    public function doOperation($operation)
+    public function doOperation($operation, $transop)
     {
         switch ($operation['method']) {
             case 'get':
                 $sql = "SELECT * from `" . $operation['table']."`";
                 $where = $this->getWhere($operation);
                 $sql = $sql . $where;
-                #echo ($sql);
+                // die ($sql);
                 $stmt = $this->conn->prepare($sql);
                 $stmt->execute();
                 $result = $stmt->get_result();
@@ -224,22 +223,23 @@ class MySQL implements DbInterface
                 $keys = "";
                 $values = "";
                 foreach ($operation['body'] as $key => $value) {
-                    if ($value!=null) {
-                        $keys = $keys. "`" . $key . "`,";
-                        $values = $values . "'" . $this->getDeferedValue($value) . "',";
-                    }
+                    $keys = $keys. "`" . $key . "`,";
+                    $values = $values . "'" . $this->getDeferedValue($value) . "',";
                 }
                 $keys = substr($keys, 0, strlen($keys) - 1);
                 $values = substr($values, 0, strlen($values) - 1);
                 $sql = $sql . ' (' . $keys . ') VALUES (' . $values . ')';
-                #echo ($sql);
+                // die ($sql);
                 if ($this->conn->query($sql) === true) {
                     $postres = $this->conn->insert_id;
                 } else {
                     $postres = 0;
                 }
-
-                array_push($this->res, array("index" => $operation["index"], "result" => $postres));
+                if ($transop){
+                    array_push($this->res, array("index" => $operation["index"], "result" => $postres));
+                }else{
+                    array_push($this->res, $postres);
+                }
                 break;
             case 'put':
                 $sql = "UPDATE `" . $operation['table'] . "` SET ";
@@ -254,7 +254,12 @@ class MySQL implements DbInterface
                 } else {
                     $putres = 0;
                 }
-                array_push($this->res, array("index" => $operation["index"], "result" => $putres));
+                if ($transop){
+                    array_push($this->res, array("index" => $operation["index"], "result" => $putres));
+                }else{
+                    array_push($this->res, $putres);
+                }
+               
                 break;
             case 'delete':
                 $sql = "DELETE from `" . $operation['table']."`";
@@ -266,7 +271,12 @@ class MySQL implements DbInterface
                 } else {
                     $delres = 0;
                 }
-                array_push($this->res, array("index" => $operation["index"], "result" => $delres));
+                if ($transop){
+                    array_push($this->res, array("index" => $operation["index"], "result" => $delres));
+                }else{
+                    array_push($this->res, $delres);
+                }
+                
                 break;
             default:
                 break;
@@ -310,7 +320,7 @@ if (stripos($_SERVER['REQUEST_URI'], 'localhost')!=="false") {
         'hostname'=>'localhost',
         'username'=>'root',
         'password'=>'',
-        'database'=>'salesdove',
+        'database'=>'',
         'charset'=>'utf8mb4',
         'auth' =>false,
     ));
@@ -318,10 +328,10 @@ if (stripos($_SERVER['REQUEST_URI'], 'localhost')!=="false") {
 } else {
     $api = new DbFactory(array(
         'dbengine'=>'MySQL',
-        'hostname'=>'IPAddress',
-        'username'=>'username',
-        'password'=>'password',
-        'database'=>'database',
+        'hostname'=>'localhost',
+        'username'=>'root',
+        'password'=>'',
+        'database'=>'',
         'charset'=>'utf8mb4',
         'auth' =>false,
     ));
