@@ -2,8 +2,8 @@
 interface DbInterface
 {
     public function connect();  // First
-    public function auth();     // Second
-    public function run();      // Third
+    public function run();      // Second
+    public function doAuth($op);     // Third
 }
 
 class MySQL implements DbInterface
@@ -15,8 +15,10 @@ class MySQL implements DbInterface
     private $password = "";
     private $database = "";
     private $charset = "";
+    private $extraoperations = "";
+    private $extraopquery = "";
     private $auth = false;
-    public function __construct($hostname, $username, $password, $database, $charset, $auth)
+    public function __construct($hostname, $username, $password, $database, $charset, $extraoperations, $auth)
     {
         $this->conn = mysqli_init();
         $this->hostname = $hostname;
@@ -24,125 +26,59 @@ class MySQL implements DbInterface
         $this->password = $password;
         $this->database = $database;
         $this->charset = $charset;
+        $this->extraoperations = $extraoperations;
         $this->auth = $auth;
         $this->res = array();
     }
-    public function auth()
-    {
-        //AUTH is not enabled, have fun with the Database. ;-)
-        if (!$this->auth) {
-            return true;
-        }
-        //AUTH enabled start session.
-        session_start();
 
-        //Finding the intention of the programmer now.
-        $login = null;
-        $logout = null;
-        $operations = json_decode(file_get_contents('php://input'), true);
-        foreach ($operations as $operation) {
-            if ($operation["method"] == "login") {
-                $login = $operation;
-            }
-            if ($operation["method"] == "logout") {
-                $logout = $operation;
-            }
-        }
-        //impossible to NOT send login or logout request while no sesstion is there
-        //programmer is joking.
-        if ($login == null && $logout == null) {
-            if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'true') {
-                return true;
-            } else {
-                return false;
-            }
-        }
-
-        //impossible to send login and logout request at the same time
-        //programmer is joking.
-        if ($login !== null && $logout !== null) {
-            return false;
-        }
-        // From here we have eithe login or logout request ONLY. Cool!
-        if ($login !== null) {
-            //AUTH is enabled and login required
-            $sql = "SELECT * from `" . $login["table"] ."`". $this->getWhere($login);
-            $stmt = $this->conn->prepare($sql);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result->fetch_assoc();
-            if ($row) {
-                $_SESSION['loggedin'] = 'true';
-                $_SESSION['user'] = json_encode($row);
-                echo $_SESSION['user'];
-                return true;
-            } else {
-                echo json_encode('{"id":0, "message":"No such user."}');
-                return false;
-            }
-            $conn->close();
-        }
-        
-        
-        if ($logout !== null) {
-            //AUTH is enabled and logout required
-            session_unset();
-            session_destroy();
-            return false;
-        }
-
-        //If you are here then you are a hacker, have a good time with this big FALSE.
-        return false;
-    }
     private function getWhere($operation)
     {
-        $where = "";
-        $satisfy = $operation["satisfy"] == "all" ? " AND " : " OR ";
-        $where_array = explode(";", $operation['where']);
-        foreach ($where_array as $item) {
-            if (!$item) {
-                break;
-            }
-            if (strlen($where) > 0) {
-                $where .= $satisfy . $this->getOperand($item);
-            } else {
-                $where = " WHERE " . $this->getOperand($item);
+        if (!isset($operation["where"]) || empty($operation["where"])) {
+            return "";
+        }
+        $where = $operation['where'];
+        $tokens = $this->multiexplode(array("^", "~", "(", ")"), $where);
+        $where = str_replace("^", " AND ", $where);
+        $where = str_replace("~", " OR ", $where);
+        foreach ($tokens as $item) {
+            if (!empty($item)) {
+                $where = str_replace($item, $this->getOperand($item), $where);
             }
         }
-        return $where;
+        return ' WHERE ' . $where;
     }
     private function getOperand($item)
     {
         $field = explode(",", $item);
-        switch ($field[1]) {
+        switch (trim($field[1])) {
             case 'eq':
-                return "`".$field[0]."`" . " = '" . $field[2] . "' ";
+                return "`" . trim($field[0]) . "`" . " = '" . trim($field[2]) . "' ";
                 break;
             case 'neq':
-                return "`".$field[0]."`" . " != '" . $field[2] . "' ";
+                return "`" . trim($field[0]) . "`" . " != '" . trim($field[2]) . "' ";
                 break;
             case 'gt':
-                return "`".$field[0]."`" . " > " . $field[2];
+                return "`" . trim($field[0]) . "`" . " > " . trim($field[2]);
                 break;
             case 'lt':
-                return "`".$field[0]."`" . " < " . $field[2];
+                return "`" . trim($field[0]) . "`" . " < " . trim($field[2]);
                 break;
             case 'gte':
-                return "`".$field[0]."`" . " >= " . $field[2];
+                return "`" . trim($field[0]) . "`" . " >= " . trim($field[2]);
                 break;
             case 'lte':
-                return "`".$field[0]."`" . " <= " . $field[2];
+                return "`" . trim($field[0]) . "`" . " <= " . trim($field[2]);
                 break;
             case 'cs':
-                return " INSTR (" . "`".$field[0]."`" . ",'" . $field[2] . "') ";
+                return " INSTR (" . "`" . trim($field[0]) . "`" . ",'" . trim($field[2]) . "') ";
                 break;
             case 'bt':
-                return "`".$field[0]."`" . " BETWEEN " . $field[2] . " AND " . $field[3];
+                return "`" . trim($field[0]) . "`" . " BETWEEN " . trim($field[2]) . " AND " . $field[3];
                 break;
             case 'in':
-                $result = "`".$field[0]."`" . " in (";
+                $result = "`" . trim($field[0]) . "`" . " in (";
                 for ($i = 2; $i < sizeof($field); $i++) {
-                    $result .= "'".$field[$i] . "',";
+                    $result .= "'" . $field[$i] . "',";
                 }
                 $result = substr($result, 0, strlen($result) - 1) . ") ";
                 return $result;
@@ -151,6 +87,12 @@ class MySQL implements DbInterface
                 return null;
                 break;
         }
+    }
+    private function multiexplode($delimiters, $string)
+    {
+        $ready = str_replace($delimiters, $delimiters[0], $string);
+        $launch = explode($delimiters[0], $ready);
+        return  $launch;
     }
     private function getDeferedValue($value)
     {
@@ -174,56 +116,145 @@ class MySQL implements DbInterface
             return true;
         }
     }
-    
     public function run()
     {
-        if (!$this->auth()) {
+        $requestmethod = $_SERVER['REQUEST_METHOD'];
+        $operationsraw = trim(file_get_contents('php://input'));
+        $ops = json_decode($operationsraw, true);
+
+        if (!$this->doAuth($ops)) {
             return;
         }
-        $operationsraw= trim(file_get_contents('php://input'));
-        $operations = json_decode($operationsraw, true);
-        if (substr($operationsraw,0,1)==="["){
-            foreach ($operations as $operation) {
-                $this->doOperation($operation, true);
-            }
-        }else{
-            $this->doOperation($operations, false);
+        if ($requestmethod == 'GET' || $requestmethod == 'DELETE') {
+            $uri = $_SERVER['REQUEST_URI'];
+            $uriItems = array_slice(explode('/', $uri), 3);
+            $op = array("table" => "", "method" => "",  "where" => "", "satisfy" => "");
+            sizeof($uriItems) >= 2 ? $op["table"] = $uriItems[0] : null;
+            sizeof($uriItems) >= 2 ? $op["method"] = $uriItems[1] == 'data' ? "get" : $uriItems[1] : null;
+            sizeof($uriItems) >= 3 ? $op["where"] = $uriItems[2] : null;
+            sizeof($uriItems) >= 3 ? $op["satisfy"] = "all" : null;
+            sizeof($uriItems) == 4 ? $op["satisfy"] = $uriItems[3] : null;
         }
-        $this->conn->close();
-        echo json_encode($this->res);
+
+        switch ($requestmethod) {
+            case 'GET':
+                $this->doOperation($op, false);
+                $this->conn->close();
+                echo json_encode($this->res);
+                break;
+            case 'DELETE':
+                $op["method"] = "delete";
+                $this->doOperation($op, false);
+                $this->conn->close();
+                echo json_encode($this->res[0]);
+                break;
+            case 'PUT':
+            case 'POST':
+                if (substr($operationsraw, 0, 1) === "[") {
+                    foreach ($ops as $op) {
+                        $this->doOperation($op, true);
+                    }
+                } else {
+                    if ($ops["method"] !== "login") {
+                        $this->doOperation($ops, false);
+                    }
+                }
+                $this->conn->close();
+                echo json_encode($this->res);
+                break;
+        }
     }
-    
+    public function doAuth($op)
+    {
+        session_start();
+        $login = false;
+        $logout = false;
+        if (isset($op["method"]) && $op["method"] == "login") {
+            $login = true;
+            $sql = "SELECT * from `" . $op["table"] . "`" . $this->getWhere($op);
+            $stmt = $this->conn->prepare($sql);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $row = $result->fetch_assoc();
+            if ($row) {
+                $_SESSION['loggedin'] = 'true';
+                $_SESSION['user'] = json_encode($row);
+                array_push($this->res, $row);
+                return true;
+            } else {
+                echo json_encode('{"id":0, "message":"No such user."}');
+                return false;
+            }
+        }
+
+        if (isset($op["method"]) && $op["method"] == "logout") {
+            $logout = true;
+            session_unset();
+            session_destroy();
+            echo 'Loggout out successfully';
+            return false;
+        }
+        //If no login or logout request is sent and the web user need somting else
+        //Check if he already have open session
+        if (!$login && !$logout) {
+            if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'true') {
+                return true;
+            } else {
+                //No session? check if Auth is required at all
+                if ($this->auth) {
+                    echo 'Unauthorized Access !!!';
+                    return false;
+                } else {
+                    return true;
+                }
+            }
+        }
+    }
     public function doOperation($operation, $transop)
     {
+        if (!empty($this->extraoperations)) {
+            include $this->extraoperations;
+        }
         switch ($operation['method']) {
             case 'get':
-                $sql = "SELECT * from `" . $operation['table']."`";
+                $sql = "SELECT * from `" . $operation['table'] . "`";
                 $where = $this->getWhere($operation);
                 $sql = $sql . $where;
-                // die ($sql);
                 $stmt = $this->conn->prepare($sql);
                 $stmt->execute();
                 $result = $stmt->get_result();
+                $getres = array();
                 while ($r = $result->fetch_assoc()) {
-                    array_push($this->res, $r);
+                    array_push($getres, $r);
+                }
+                if ($transop) {
+                    array_push($this->res, array("index" => $operation["index"], "result" => $getres));
+                } else {
+                    $this->res = $getres;
                 }
                 break;
             case 'fieldsnames':
-                $sql = "SELECT  `COLUMN_NAME` as col FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_SCHEMA`='". $this->database."'   AND `TABLE_NAME`='" . $operation['table']."'";
+                $sql = "SELECT  `COLUMN_NAME` as col FROM `INFORMATION_SCHEMA`.`COLUMNS` WHERE `TABLE_SCHEMA`='" . $this->database . "'   AND `TABLE_NAME`='" . $operation['table'] . "'";
                 $stmt = $this->conn->prepare($sql);
                 $stmt->execute();
                 $result = $stmt->get_result();
+                $rescols = array();
                 while ($r = $result->fetch_assoc()) {
-                    array_push($this->res, $r['col']);
+                    array_push($rescols, $r['col']);
+                }
+                if ($transop) {
+                    array_push($this->res, array("index" => $operation["index"], "result" => $rescols));
+                } else {
+                    $this->res = $rescols;
                 }
                 break;
-           
+
             case 'post':
-                $sql = "INSERT INTO `" . $operation['table']."`";
+                $sql = "INSERT INTO `" . $operation['table'] . "`";
                 $keys = "";
                 $values = "";
                 foreach ($operation['body'] as $key => $value) {
-                    $keys = $keys. "`" . $key . "`,";
+                    $keys = $keys . "`" . $key . "`,";
                     $values = $values . "'" . $this->getDeferedValue($value) . "',";
                 }
                 $keys = substr($keys, 0, strlen($keys) - 1);
@@ -235,9 +266,9 @@ class MySQL implements DbInterface
                 } else {
                     $postres = 0;
                 }
-                if ($transop){
+                if ($transop) {
                     array_push($this->res, array("index" => $operation["index"], "result" => $postres));
-                }else{
+                } else {
                     array_push($this->res, $postres);
                 }
                 break;
@@ -254,16 +285,15 @@ class MySQL implements DbInterface
                 } else {
                     $putres = 0;
                 }
-                if ($transop){
+                if ($transop) {
                     array_push($this->res, array("index" => $operation["index"], "result" => $putres));
-                }else{
+                } else {
                     array_push($this->res, $putres);
                 }
-               
+
                 break;
             case 'delete':
-                $sql = "DELETE from `" . $operation['table']."`";
-                $satisfy = $operation["satisfy"] == "all" ? " AND " : " OR ";
+                $sql = "DELETE from `" . $operation['table'] . "`";
                 $where = $this->getWhere($operation);
                 $sql = $sql . $where;
                 if ($this->conn->query($sql) === true) {
@@ -271,14 +301,21 @@ class MySQL implements DbInterface
                 } else {
                     $delres = 0;
                 }
-                if ($transop){
+                if ($transop) {
                     array_push($this->res, array("index" => $operation["index"], "result" => $delres));
-                }else{
+                } else {
                     array_push($this->res, $delres);
                 }
-                
                 break;
             default:
+                if (!empty($this->extraopquery)) {
+                    $stmt = $this->conn->prepare($this->extraopquery);
+                    $stmt->execute();
+                    $result = $stmt->get_result();
+                    while ($r = $result->fetch_assoc()) {
+                        array_push($this->res, $r);
+                    }
+                }
                 break;
         }
     }
@@ -301,11 +338,11 @@ class DbFactory
         extract($this->config);
         switch ($dbengine) {
             case 'MySQL':
-                $mysql = new MySQL($hostname, $username, $password, $database, $charset, $auth);
+                $mysql = new MySQL($hostname, $username, $password, $database, $charset, $extraoperations, $auth);
                 if ($mysql->connect()) {
                     $mysql->run();
                 } else {
-                    echo("Connection to $hostname database $database failed. Invsales Web serivice");
+                    echo ("Connection to $hostname database $database failed. Invsales Web serivice");
                 }
                 break;
             default:
@@ -313,27 +350,29 @@ class DbFactory
         }
     }
 }
-        
-if (stripos($_SERVER['REQUEST_URI'], 'localhost')!=="false") {
+
+if (stripos($_SERVER['REQUEST_URI'], 'localhost') !== "false") {
     $api = new DbFactory(array(
-        'dbengine'=>'MySQL',
-        'hostname'=>'localhost',
-        'username'=>'root',
-        'password'=>'',
-        'database'=>'',
-        'charset'=>'utf8mb4',
-        'auth' =>false,
+        'dbengine' => 'MySQL',
+        'hostname' => 'localhost',
+        'username' => 'root',
+        'password' => '',
+        'database' => 'dbname',
+        'charset' => 'utf8mb4',
+        'extraoperations' => 'apiExtraOperations.php',
+        'auth' => false,
     ));
     $api->execute();
 } else {
     $api = new DbFactory(array(
-        'dbengine'=>'MySQL',
-        'hostname'=>'localhost',
-        'username'=>'root',
-        'password'=>'',
-        'database'=>'',
-        'charset'=>'utf8mb4',
-        'auth' =>false,
+        'dbengine' => 'MySQL',
+        'hostname' => 'localhost',
+        'username' => 'root',
+        'password' => '',
+        'database' => 'dbname',
+        'charset' => 'utf8mb4',
+        'extraoperations' => '',
+        'auth' => false,
     ));
     $api->execute();
 }
