@@ -85,7 +85,16 @@ name, a comma, the match type, another commma and the value you want to filter o
   - "lte": lower or equal (number is lower than or equal to value)
   - "bt": between (number is between two comma separated values)
   - "in": in (number or string is in comma separated list of values)
-  
+```JSON
+{
+  "method":"get",
+  "table":"users",
+  "where":"id,bt,12,50^(name,cs,dav~age,gte,30)"
+}
+```  
+The above operation are send using the POST method. It will fetch all rows from table users.
+Where id is between 12 and 50 AND (name contains string 'dav' OR age >=30).
+
 
 ### Multiple and complex filters
 Stay tuned...
