@@ -16,7 +16,6 @@ class MySQL implements DbInterface
     private $database = "";
     private $charset = "";
     private $extraoperations = "";
-    private $extraopquery = "";
     private $auth = false;
     public function __construct($hostname, $username, $password, $database, $charset, $extraoperations, $auth)
     {
@@ -306,16 +305,6 @@ class MySQL implements DbInterface
                     array_push($this->res, array("index" => $operation["index"], "result" => $delres));
                 } else {
                     array_push($this->res, $delres);
-                }
-                break;
-            default:
-                if (!empty($this->extraopquery)) {
-                    $stmt = $this->conn->prepare($this->extraopquery);
-                    $stmt->execute();
-                    $result = $stmt->get_result();
-                    while ($r = $result->fetch_assoc()) {
-                        array_push($this->res, $r);
-                    }
                 }
                 break;
         }

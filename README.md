@@ -160,6 +160,76 @@ To delete rows use the following JSON as your POST http request:
 ```
 When sending this body in your http POST query, api will delete all items for order 12 or for product id 3
 
+#### Extra Operations
+
+Extra operations is when you need more cusomtized get query that may return JSON array that contains sub arrays.
+In our apiExtraOperations we have the following operation `get_one_order` that will look like this:
+```PHP
+switch ($operation['method']) {
+    case 'get_one_order':
+        $orderid=$operation["orderid"];
+        $sql = "
+        SELECT *,
+        (SELECT CONCAT('[',GROUP_CONCAT('{','\"id\":',id,',\"orderid\":',orderid,',\"productid\":',productid,',\"qty\":',qty,',\"unitprice\":',unitprice,',\"totalprice\":',totalprice,'}'),']') from orderitems i where i.orderid=o.id) as items
+        from orders o where o.id=  $orderid
+        ";
+        $stmt = $this->conn->prepare($sql);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($r = $result->fetch_assoc()) {
+            $r["items"]= json_decode($r["items"]);
+            array_push($this->res, $r);
+        }
+        break;
+}
+```
+This operation beside the name 'get_one_order` it has another parameter that takes the order id. Like so:
+
+```JSON
+{
+  "method":"get_one_order",
+  "orderid": "1"
+}
+```
+When you run this body in your http POST request. The API returns the folloing result:
+
+```JSON
+[
+    {
+        "id": 1,
+        "customerid": 4,
+        "date": "2019-01-01 10:48:48",
+        "amount": "262.00",
+        "items": [
+            {
+                "id": 72,
+                "orderid": 1,
+                "productid": 1,
+                "qty": 5,
+                "unitprice": 21,
+                "totalprice": 105
+            },
+            {
+                "id": 132,
+                "orderid": 1,
+                "productid": 1,
+                "qty": 2,
+                "unitprice": 31,
+                "totalprice": 62
+            },
+            {
+                "id": 249,
+                "orderid": 1,
+                "productid": 2,
+                "qty": 5,
+                "unitprice": 19,
+                "totalprice": 95
+            }
+        ]
+    }
+]
+```
+
 ### Filters
 
 Filters provide search functionality, on where part in your request body. You need to specify the column
@@ -260,7 +330,7 @@ Stay tuned...
 Stay tuned...
 
 ### Authentication
-Supports Authentication. Just use `auth=true` in your configuraiton and the api will not support any operation before sending the `login' method'.
+Supports Authentication. Just use `auth=>true` in your configuraiton and the api will not support any operation before sending the `login` method'.
 
 First request to the api will be as the following:
 ```JSON 
@@ -273,7 +343,7 @@ First request to the api will be as the following:
 Result of the above request will be:
 ```JSON 
 {
-  "1d":'user id',
+  "1d":"user id",
   "name": "full name",
   "phone":"phone number",
   "extrafields":"extra fields in the users table"
@@ -293,13 +363,6 @@ User successfully logged out !!
 
 ```
 And the API will be blocked from the current user.
-
-
-
-
-
-
-
 
 ### File uploads
 Stay tuned...
