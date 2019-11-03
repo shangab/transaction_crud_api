@@ -214,7 +214,7 @@ The above operation will insert a new customer and same his/her new id in `__OP_
 
 
 ### Column selection
-When using ```JSON {"method":"get"}``` you can use extra data such as ```JSON {"method":"get", "fields":"comma separated fields names"}``` to get only these fields or skip using the `fields' attribute to get all columns.
+When using ```{"method":"get"}``` you can use extra data such as ```{"method":"get", "fields":"comma separated fields names"}``` to get only these fields or skip using the `fields' attribute to get all columns.
 
 ```JSON 
 {
@@ -225,6 +225,24 @@ When using ```JSON {"method":"get"}``` you can use extra data such as ```JSON {"
 
 ```
 The above request will return columns with different names, and columns manipulated as well. Like total price will be returned two times one with the same amount as totalprice and the other with a new name MULTOT as doubled amount.
+```JSON
+[
+    {
+        "id": 1,
+        "QT": 5,
+        "UPRICE": "23.00",
+        "totalprice": "115.00",
+        "MULTTOT": "230.00"
+    },
+    {
+        "id": 2,
+        "QT": 4,
+        "UPRICE": "13.00",
+        "totalprice": "52.00",
+        "MULTTOT": "104.00"
+    }
+    ...etc
+```
 
 ### Ordering
 Stay tuned...
