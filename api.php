@@ -217,7 +217,8 @@ class MySQL implements DbInterface
         }
         switch ($operation['method']) {
             case 'get':
-                $sql = "SELECT * from `" . $operation['table'] . "`";
+                $fields= isset($operation["fields"])?$operation["fields"]:"*";
+                $sql = "SELECT $fields from `" . $operation['table'] . "`";
                 $where = $this->getWhere($operation);
                 $sql = $sql . $where;
                 $stmt = $this->conn->prepare($sql);
@@ -362,16 +363,17 @@ if (stripos($_SERVER['REQUEST_URI'], 'localhost') !== "false") {
         'extraoperations' => 'apiExtraOperations.php',
         'auth' => false,
     ));
+
     $api->execute();
 } else {
     $api = new DbFactory(array(
         'dbengine' => 'MySQL',
-        'hostname' => 'localhost',
-        'username' => 'root',
-        'password' => '',
-        'database' => 'demodb',
+        'hostname' => '<production IP Address>',
+        'username' => 'username',
+        'password' => 'password',
+        'database' => '<db name>',
         'charset' => 'utf8mb4',
-        'extraoperations' => '',
+        'extraoperations' => 'apiExtraOperations.php',
         'auth' => false,
     ));
     $api->execute();
