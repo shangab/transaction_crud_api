@@ -35,6 +35,7 @@ class MySQL implements DbInterface
         if (!isset($operation["where"]) || empty($operation["where"])) {
             return "";
         }
+
         $where = $operation['where'];
         $tokens = $this->multiexplode(array("^", "~", "(", ")"), $where);
         $where = str_replace("^", " AND ", $where);
@@ -55,6 +56,9 @@ class MySQL implements DbInterface
                 break;
             case 'neq':
                 return "`" . trim($field[0]) . "`" . " != '" . trim($field[2]) . "' ";
+                break;
+            case 'isnull':
+                return "`" . trim($field[0]) . "`" . " is null ";
                 break;
             case 'gt':
                 return "`" . trim($field[0]) . "`" . " > " . trim($field[2]);
@@ -125,18 +129,16 @@ class MySQL implements DbInterface
             return;
         }
         if ($requestmethod == 'GET' || $requestmethod == 'DELETE') {
-            $uri = $_SERVER['REQUEST_URI'];
-            $uriItems = array_slice(explode('/', $uri), 3);
-            $op = array("table" => "", "method" => "",  "where" => "", "satisfy" => "");
-            sizeof($uriItems) >= 2 ? $op["table"] = $uriItems[0] : null;
-            sizeof($uriItems) >= 2 ? $op["method"] = $uriItems[1] == 'data' ? "get" : $uriItems[1] : null;
-            sizeof($uriItems) >= 3 ? $op["where"] = $uriItems[2] : null;
-            sizeof($uriItems) >= 3 ? $op["satisfy"] = "all" : null;
-            sizeof($uriItems) == 4 ? $op["satisfy"] = $uriItems[3] : null;
+            $op = array("table" => "", "method" => "",  "where" => "", "order" => "", "fields" => "");
+            $op["table"] = $_GET["table"];
+            $op["fields"] =  isset($_GET["fields"]) ? $_GET["fields"] : "*";
+            $op["where"] =  isset($_GET["where"]) ? $_GET["where"] : "";
+            $op["order"] =  isset($_GET["order"]) ? $_GET["order"] : "";
         }
 
         switch ($requestmethod) {
             case 'GET':
+                $op["method"] = "get";
                 $this->doOperation($op, false);
                 $this->conn->close();
                 echo json_encode($this->res);
@@ -216,10 +218,11 @@ class MySQL implements DbInterface
         }
         switch ($operation['method']) {
             case 'get':
-                $fields= isset($operation["fields"])?$operation["fields"]:"*";
+                $fields = $operation["fields"];
+                $order = isset($operation["order"]) && !empty($operation["order"]) ? " ORDER BY " . $operation["order"] : "";
                 $sql = "SELECT $fields from `" . $operation['table'] . "`";
                 $where = $this->getWhere($operation);
-                $sql = $sql . $where;
+                $sql = $sql . $where . $order;
                 $stmt = $this->conn->prepare($sql);
                 $stmt->execute();
                 $result = $stmt->get_result();

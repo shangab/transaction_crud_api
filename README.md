@@ -1,4 +1,6 @@
 # Transaction_CRUD_Api
+Thanks to the project [https://github.com/mevdschee/php-crud-api](https://github.com/mevdschee/php-crud-api) as it was my inspiration to create this one.
+
 A CRUD API for many MySQL Systems, and others in the future
 
 Single file PHP 5.6 script that adds a REST API to a MySQL 5.6 InnoDB, MariaDB databases. 
@@ -87,6 +89,41 @@ When sending this body in your POST query api will insert a new product in the t
 such that 12 is the new id for the row, as id is an AUTO INCREMENT primary key you do not have to include it in your request body.
 
 #### Read
+To read data using the GET method, see this example:
+
+```
+http://localhost/site/api.php?table=orders&method=get&order=customerid asc,amount desc&fields=id,customerid,amount&where=customerid,bt,1,5
+```
+this will get from the table `orders`, orders of customers between 1 and 5, it will select `fields: id, customerid, amount` ony and order the result by customerid assending and amount descending.
+
+Result will look like this:
+
+```JSON
+[
+    {
+        "id": 76,
+        "customerid": 1,
+        "amount": "467.00"
+    },
+    {
+        "id": 27,
+        "customerid": 1,
+        "amount": "457.00"
+    },
+    {
+        "id": 34,
+        "customerid": 1,
+        "amount": "366.00"
+    },
+    {
+        "id": 37,
+        "customerid": 1,
+        "amount": "356.00"
+    },
+    ...ect
+]
+```
+
 To get rows from table use the following body for your POST http query:
 
 ```JSON
@@ -150,7 +187,12 @@ When sending this body in your POST query api will update the product name  to `
 
 
 #### Delete
-To delete rows use the following JSON as your POST http request: 
+You can use the `DELETE` http request like so:
+
+`DELETE http://www.domainname.com/api.php?table=orders&where=amount,isnull`
+This will delete all orders with null amount.
+
+Or to delete rows use the following JSON as your POST http request: 
 ```JSON
 {
   "method":"delete",
@@ -235,15 +277,18 @@ When you run this body in your http POST request. The API returns the folloing r
 Filters provide search functionality, on where part in your request body. You need to specify the column
 name, a comma, the match type, another commma and the value you want to filter on. These are supported match types:
 
+  - "^": CTR+6 is used in the `where` attribute and it means logical AND
+  - "~": Tilda is used in the `where` attribute and it means logical OR
   - "cs": contain string (string contains value)
-  - "eq": equal (string or number matches exactly)
-  - "neq": Not equal (string or number matches exactly)
-  - "gt": greater than (number is higher than value)
-  - "lt": lower than (number is lower than value)
-  - "gte": greater or equal (number is higher than or equal to value)
-  - "lte": lower or equal (number is lower than or equal to value)
-  - "bt": between (number is between two comma separated values)
-  - "in": in (number or string is in comma separated list of values)
+  - "isnull": where the mentioned field is null example: `where=amount,isnull`;
+  - "eq": equal (string or number date matches exactly)
+  - "neq": Not equal (string or number date NOT matches exactly)
+  - "gt": greater than (string or number date is higher than value)
+  - "lt": lower than (string or number date is lower than value)
+  - "gte": greater or equal (string or number date is higher than or equal to value)
+  - "lte": lower or equal (string or number date is lower than or equal to value)
+  - "bt": between (string or number date is between two comma separated values)
+  - "in": in (string or number date is in comma separated list of values)
 ```JSON
 {
   "method":"get",
@@ -315,7 +360,8 @@ The above request will return columns with different names, and columns manipula
 ```
 
 ### Ordering
-Stay tuned...
+
+When using the GET method or the POST method with attribute `method=get`, you can use attribute `order` to include ordering by columns like this: `order=fld1 asc, fld2 desc, fld3 asc...etc`;
 
 ### Limit size
 Stay tuned...
@@ -366,3 +412,27 @@ And the API will be blocked from the current user.
 
 ### File uploads
 Stay tuned...
+
+### License
+
+MIT License
+
+Copyright (c) 2019 Maurits van der Schee
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
