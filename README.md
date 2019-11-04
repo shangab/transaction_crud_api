@@ -15,7 +15,7 @@ The following features are supported:
 
   - Single PHP file, easy to deploy.
   - Very little code, easy to adapt and maintain
-  - Supports GET, POST, PUT, DELETE and cusotmized operations
+  - Supports GET, POST, PUT, DELETE and customized operations
   - Supports a JSON object as input
   - Supports a JSON array as input (batch operations)
   - Multi-domain CORS support for cross-domain requests
@@ -25,13 +25,13 @@ The following features are supported:
 
 This is a single file application! Upload "`api.php`" somewhere and enjoy!
 
-## Use our dmodb.sql
+## Use our demodb.sql
 The file demodb.sql contains a demo database having 4 tables.
 Install WampServer or Xampserver and then run the SQL in this file.
 It will setup the demodb with 4 tables:
 - products: is a lookup table contain id,name for 3 products only as example.
-- cusomters: is a table contains 100 fake cusomters with fields: id, fullname and phone.
-- orders: is a table contains 100 orders for the cusomters with fields: id,date, cusomterid and amount
+- customers: is a table contains 100 fake customers with fields: id, fullname and phone.
+- orders: is a table contains 100 orders for the customers with fields: id,date, customerid and amount
 - orderitems: a table contains the items for each order with fields: id, productid, qty, unitprice, totalprice  
 
 ## Configuration
@@ -204,7 +204,7 @@ When sending this body in your http POST query, api will delete all items for or
 
 #### Extra Operations
 
-Extra operations is when you need more cusomtized get query that may return JSON array that contains sub arrays.
+Extra operations is when you need more customized get query that may return JSON array that contains sub arrays.
 In our apiExtraOperations we have the following operation `get_one_order` that will look like this:
 ```PHP
 switch ($operation['method']) {
