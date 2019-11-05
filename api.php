@@ -344,7 +344,7 @@ class DbFactory
     }
 }
 
-if (stripos($_SERVER['REQUEST_URI'], 'localhost') !== "false") {
+if ($_SERVER['HTTP_HOST']==='localhost') {
     $api = new DbFactory(array(
         'dbengine' => 'MySQL',
         'hostname' => 'localhost',

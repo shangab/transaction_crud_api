@@ -38,19 +38,7 @@ It will setup the demodb with 4 tables:
 You modify the configuration part at the end of the api.php file:
 ```php
 
-if (stripos($_SERVER['REQUEST_URI'], 'localhost') !== "false") {
-    $api = new DbFactory(array(
-        'dbengine' => 'MySQL',
-        'hostname' => '<production IP Address>',
-        'username' => 'username',
-        'password' => 'password',
-        'database' => '<db name>',
-        'charset' => 'utf8mb4',
-        'extraoperations' => 'apiExtraOperations.php',
-        'auth' => false,
-    ));
-    $api->execute();
-} else {
+if ($_SERVER['HTTP_HOST']==='localhost') {
     $api = new DbFactory(array(
         'dbengine' => 'MySQL',
         'hostname' => 'localhost',
@@ -62,6 +50,18 @@ if (stripos($_SERVER['REQUEST_URI'], 'localhost') !== "false") {
         'auth' => false,
     ));
     $api->execute();
+} else {
+	$api = new DbFactory(array(
+        'dbengine' => 'MySQL',
+        'hostname' => '<production IP Address>',
+        'username' => 'username',
+        'password' => 'password',
+        'database' => '<db name>',
+        'charset' => 'utf8mb4',
+        'extraoperations' => 'apiExtraOperations.php',
+        'auth' => false,
+    ));
+	$api->execute();
 }
 }
 ```
