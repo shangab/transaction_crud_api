@@ -58,7 +58,7 @@ class MySQL implements DbInterface
                 return "`" . trim($field[0]) . "`" . " != '" . trim($field[2]) . "' ";
                 break;
             case 'isnull':
-                return "`" . trim($field[0]) . "`" . " is null ";
+                return "`" . trim($field[0]) . "` is null ";
                 break;
             case 'gt':
                 return "`" . trim($field[0]) . "`" . " > " . trim($field[2]);
@@ -76,7 +76,7 @@ class MySQL implements DbInterface
                 return " INSTR (" . "`" . trim($field[0]) . "`" . ",'" . trim($field[2]) . "') ";
                 break;
             case 'bt':
-                return "`" . trim($field[0]) . "`" . " BETWEEN " . trim($field[2]) . " AND " . $field[3];
+                return "`" . trim($field[0]) . "`" . " BETWEEN '" . trim($field[2]) . "' AND '" . $field[3] . "' ";
                 break;
             case 'in':
                 $result = "`" . trim($field[0]) . "`" . " in (";
@@ -138,6 +138,8 @@ class MySQL implements DbInterface
 
         switch ($requestmethod) {
             case 'GET':
+				echo $_SERVER["HTTP_HOST"];
+				die();
                 $op["method"] = "get";
                 $this->doOperation($op, false);
                 $this->conn->close();
@@ -218,7 +220,7 @@ class MySQL implements DbInterface
         }
         switch ($operation['method']) {
             case 'get':
-                $fields = $operation["fields"];
+                $fields = isset($operation["fields"]) && !empty($operation["fields"])?$operation["fields"]:"*";
                 $order = isset($operation["order"]) && !empty($operation["order"]) ? " ORDER BY " . $operation["order"] : "";
                 $sql = "SELECT $fields from `" . $operation['table'] . "`";
                 $where = $this->getWhere($operation);
@@ -343,7 +345,6 @@ class DbFactory
         }
     }
 }
-
 if ($_SERVER['HTTP_HOST']==='localhost') {
     $api = new DbFactory(array(
         'dbengine' => 'MySQL',
