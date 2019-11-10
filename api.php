@@ -1,4 +1,5 @@
 <?php
+
 interface DbInterface
 {
     public function connect();  // First
@@ -138,8 +139,6 @@ class MySQL implements DbInterface
 
         switch ($requestmethod) {
             case 'GET':
-				echo $_SERVER["HTTP_HOST"];
-				die();
                 $op["method"] = "get";
                 $this->doOperation($op, false);
                 $this->conn->close();
@@ -169,58 +168,62 @@ class MySQL implements DbInterface
     }
     public function doAuth($op)
     {
-        session_start();
-        $login = false;
-        $logout = false;
-        if (isset($op["method"]) && $op["method"] == "login") {
-            $login = true;
+        if (isset($op["method"]) && $op["method"] === "login") {
+            $tokenlifetime = date("Y-m-d H:i:s", time() + $op["tokenlifetime"]);
             $sql = "SELECT * from `" . $op["table"] . "`" . $this->getWhere($op);
             $stmt = $this->conn->prepare($sql);
             $stmt->execute();
             $result = $stmt->get_result();
             $row = $result->fetch_assoc();
             if ($row) {
-                $_SESSION['loggedin'] = 'true';
-                $_SESSION['user'] = json_encode($row);
-                array_push($this->res, $row);
-                return true;
+                $token = bin2hex(random_bytes(64));
+                $query = "insert into tokens (tokenlifetime, token) values ('$tokenlifetime','$token')";
+                if ($this->conn->query($query) === true) {
+                    $row["token"] = $token;
+                    $row["tokenlifetime"] = $tokenlifetime;
+                    array_push($this->res, $row);
+                    return true;
+                } else {
+                    return false;
+                }
             } else {
-                echo json_encode('{"id":0, "message":"No such user."}');
                 return false;
             }
         }
-
-        if (isset($op["method"]) && $op["method"] == "logout") {
-            $logout = true;
-            session_unset();
-            session_destroy();
-            echo 'Loggout out successfully';
+        foreach (getallheaders() as $key => $value) {
+            if ($key == 'APITOKEN') {
+                $apitoken = $value;
+            }
+        }
+        if (isset($op["method"]) && $op["method"] === "logout") {
+            if ($this->conn->query("delete from tokens where token='$apitoken'") === true) {
+                $resobj = json_encode(array('status' => true, 'message' => 'Successfully logout out'), JSON_FORCE_OBJECT);
+            } else {
+                $resobj = json_encode(array('status' => true, 'message' => 'Can not Successfully log out'), JSON_FORCE_OBJECT);
+            }
+            echo $resobj;
             return false;
         }
         //If no login or logout request is sent and the web user need somting else
         //Check if he already have open session
-        if (!$login && !$logout) {
-            if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'true') {
-                return true;
-            } else {
-                //No session? check if Auth is required at all
-                if ($this->auth) {
-                    echo 'Unauthorized Access !!!';
-                    return false;
-                } else {
-                    return true;
-                }
-            }
+        $stmt = $this->conn->prepare("select * from tokens where token ='$apitoken'");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            return true;
+        } else {
+            $resobj = json_encode(array('status' => false, 'message' => 'Unauthorized Aceess.'), JSON_FORCE_OBJECT);
+            echo ($resobj);
+            return false;
         }
     }
     public function doOperation($operation, $transop)
     {
-        if (!empty($this->extraoperations)) {
-            include $this->extraoperations;
-        }
+
         switch ($operation['method']) {
             case 'get':
-                $fields = isset($operation["fields"]) && !empty($operation["fields"])?$operation["fields"]:"*";
+                $fields = isset($operation["fields"]) && !empty($operation["fields"]) ? $operation["fields"] : "*";
                 $order = isset($operation["order"]) && !empty($operation["order"]) ? " ORDER BY " . $operation["order"] : "";
                 $sql = "SELECT $fields from `" . $operation['table'] . "`";
                 $where = $this->getWhere($operation);
@@ -253,7 +256,6 @@ class MySQL implements DbInterface
                     $this->res = $rescols;
                 }
                 break;
-
             case 'post':
                 $sql = "INSERT INTO `" . $operation['table'] . "`";
                 $keys = "";
@@ -313,6 +315,9 @@ class MySQL implements DbInterface
                 }
                 break;
         }
+        if (!empty($this->extraoperations)) {
+            include $this->extraoperations;
+        }
     }
 }
 
@@ -345,29 +350,28 @@ class DbFactory
         }
     }
 }
-if ($_SERVER['HTTP_HOST']==='localhost') {
+if ($_SERVER['HTTP_HOST'] === 'localhost') {
     $api = new DbFactory(array(
         'dbengine' => 'MySQL',
         'hostname' => 'localhost',
         'username' => 'root',
         'password' => '',
-        'database' => 'demodb',
+        'database' => 'mafraza',
         'charset' => 'utf8mb4',
         'extraoperations' => 'apiExtraOperations.php',
-        'auth' => false,
+        'auth' => true,
     ));
-
     $api->execute();
 } else {
     $api = new DbFactory(array(
         'dbengine' => 'MySQL',
-        'hostname' => '<production IP Address>',
-        'username' => 'username',
-        'password' => 'password',
+        'hostname' => '<IP Address>',
+        'username' => '<username>',
+        'password' => '<password>',
         'database' => '<db name>',
         'charset' => 'utf8mb4',
         'extraoperations' => 'apiExtraOperations.php',
-        'auth' => false,
+        'auth' => true,
     ));
     $api->execute();
 }

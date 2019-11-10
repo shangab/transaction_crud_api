@@ -376,25 +376,34 @@ Stay tuned...
 Stay tuned...
 
 ### Authentication
-Supports Authentication. Just use `auth=>true` in your configuraiton and the api will not support any operation before sending the `login` method'.
+Supports Authentication. Just use `auth=>true` in your configuraiton and the api will not support any operation before sending the `login` method'. When using `auth=>true` in your database you should have a table named `tokens` with two fields only `tokenlifetime` is a TIMESTAMP filed with this format: `YYYY-MM-DD H:m:s` and is a PRIMARY KEY. The other column is a named `token` and is a VARCHAR (256) length.
 
-First request to the api will be as the following:
+When sending the login request it will be as so:
+
 ```JSON 
 {
   "method":"login",
   "table": "users",
+  "tokenlifetime":3600,
   "where":"username,eq,username^pwd,eq,[md5 or hashed password]"
 }
 ```
+`tokenlifetime` is the life time of the logged in user session. The token will be destroyed after `3600` seconds. Namely, one hour.
+
 Result of the above request will be:
 ```JSON 
 {
   "1d":"user id",
   "name": "full name",
   "phone":"phone number",
-  "extrafields":"extra fields in the users table"
+  "extrafields":"extra fields in the users table",
+  "token":"16b0a5acf048822ef8b81869b4886bceb17baa22014be32a14d5efeaaae9ab81bd02517bf1d8b4b5329f9820b3f6094db46b2678fd5da79f47ade807c293930c",
+  "tokenlifetime":"Time at which the token will be destroyed"
 }
 ```
+
+When getting the token from the loginrequest you should send it in the HTTP REQUEST headers with the name `APITOKEN` otherwise the access will be not be granted to the API.
+
 And the API will start a session for this user. When the session is destroyed the user will be blocked from the API.
 
 The logout request is as follows:
