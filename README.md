@@ -376,9 +376,11 @@ Stay tuned...
 Stay tuned...
 
 ### Authentication
-Supports Authentication. Just use `auth=>true` in your configuraiton and the api will not support any operation before sending the `login` method'. When using `auth=>true` in your database you should have a table named `tokens` with two fields only `tokenlifetime` is a TIMESTAMP filed with this format: `YYYY-MM-DD H:m:s` and is a PRIMARY KEY. The other column is a named `token` and is a VARCHAR (256) length.
+This CRUD API Supports Authentication. Just use `auth=>true` in your configuraiton and the api will not support any operation before the `login` operation. 
 
-When sending the login request it will be as so:
+When using `auth=>true` in your database you should have a table named `tokens` with two fields only `tokenlifetime` is a TIMESTAMP filed with this format: `YYYY-MM-DD H:m:s` and is a PRIMARY KEY. The other column is `token` and is a VARCHAR (256) length.
+
+When sending the login request it will be like so:
 
 ```JSON 
 {
@@ -402,21 +404,36 @@ Result of the above request will be:
 }
 ```
 
-When getting the token from the loginrequest you should send it in the HTTP REQUEST headers with the name `APITOKEN` otherwise the access will be not be granted to the API.
+When getting the token from the login request you should send it in the HTTP REQUEST headers with the name `APITOKEN` otherwise the access will not be granted to the API requester.
 
-And the API will start a session for this user. When the session is destroyed the user will be blocked from the API.
+The API will work normally and start a session for this user. When the token is destroyed in the server the user will be blocked from the API.
 
-The logout request is as follows:
+You need to send a `logout` request the server only if you are using the authenticaation of the API. Otherwise you can handle logout from your client code. The logout request, if auth is used is as follows:
 ```JSON 
 {
-  "method":"logout"
+  "method":"logout",
+  "token":"16b0a5acf048822ef8b81869b4886bceb17baa22014be32a14d5efeaaae9ab81bd02517bf1d8b4b5329f9820b3f6094db46b2678fd5da79f47ade807c293930c"
 }
 ```
-Result of the above request will be:
+Result of the above request will be as follows if user has live token:
+```JSON
+[
+  {
+    "status":true,
+    "message":"Successfully logout out"
+  }
+]
 ```
-User successfully logged out !! 
+Or as follows if user has no live token:
+```JSON
+[
+  {
+    "status":true,
+    "message":"User has no life token"
+  }
+]
+```
 
-```
 And the API will be blocked from the current user.
 
 ### File uploads

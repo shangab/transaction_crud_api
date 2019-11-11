@@ -1,10 +1,13 @@
 <?php
-
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS');
+header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, APITOKEN');
+header('Content-Type: application/json;charset=utf-8');
 interface DbInterface
 {
     public function connect();  // First
     public function run();      // Second
-    public function doAuth($op);     // Third
+    public function doAuth();     // Third
 }
 
 class MySQL implements DbInterface
@@ -126,9 +129,7 @@ class MySQL implements DbInterface
         $operationsraw = trim(file_get_contents('php://input'));
         $ops = json_decode($operationsraw, true);
 
-        if (!$this->doAuth($ops)) {
-            return;
-        }
+
         if ($requestmethod == 'GET' || $requestmethod == 'DELETE') {
             $op = array("table" => "", "method" => "",  "where" => "", "order" => "", "fields" => "");
             $op["table"] = $_GET["table"];
@@ -141,71 +142,46 @@ class MySQL implements DbInterface
             case 'GET':
                 $op["method"] = "get";
                 $this->doOperation($op, false);
-                $this->conn->close();
                 echo json_encode($this->res);
                 break;
             case 'DELETE':
                 $op["method"] = "delete";
                 $this->doOperation($op, false);
-                $this->conn->close();
                 echo json_encode($this->res[0]);
                 break;
             case 'PUT':
+                $op["method"] = "put";
+                $this->doOperation($op, false);
+                echo json_encode($this->res[0]);
+                break;
             case 'POST':
                 if (substr($operationsraw, 0, 1) === "[") {
                     foreach ($ops as $op) {
                         $this->doOperation($op, true);
                     }
                 } else {
-                    if ($ops["method"] !== "login") {
-                        $this->doOperation($ops, false);
-                    }
+                    $this->doOperation($ops, false);
                 }
-                $this->conn->close();
                 echo json_encode($this->res);
                 break;
         }
+        $this->conn->close();
     }
-    public function doAuth($op)
+    private function getApiToken()
     {
-        if (isset($op["method"]) && $op["method"] === "login") {
-            $tokenlifetime = date("Y-m-d H:i:s", time() + $op["tokenlifetime"]);
-            $sql = "SELECT * from `" . $op["table"] . "`" . $this->getWhere($op);
-            $stmt = $this->conn->prepare($sql);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            $row = $result->fetch_assoc();
-            if ($row) {
-                $token = bin2hex(random_bytes(64));
-                $query = "insert into tokens (tokenlifetime, token) values ('$tokenlifetime','$token')";
-                if ($this->conn->query($query) === true) {
-                    $row["token"] = $token;
-                    $row["tokenlifetime"] = $tokenlifetime;
-                    array_push($this->res, $row);
-                    return true;
-                } else {
-                    return false;
-                }
-            } else {
-                return false;
-            }
-        }
         foreach (getallheaders() as $key => $value) {
             if ($key == 'APITOKEN') {
-                $apitoken = $value;
+                return $value;
             }
         }
-        if (isset($op["method"]) && $op["method"] === "logout") {
-            if ($this->conn->query("delete from tokens where token='$apitoken'") === true) {
-                $resobj = json_encode(array('status' => true, 'message' => 'Successfully logout out'), JSON_FORCE_OBJECT);
-            } else {
-                $resobj = json_encode(array('status' => true, 'message' => 'Can not Successfully log out'), JSON_FORCE_OBJECT);
-            }
-            echo $resobj;
-            return false;
+        return "";
+    }
+    public function doAuth()
+    {
+        if (!$this->auth) {
+            return true;
         }
-        //If no login or logout request is sent and the web user need somting else
-        //Check if he already have open session
+        $apitoken = $this->getApiToken();
         $stmt = $this->conn->prepare("select * from tokens where token ='$apitoken'");
         $stmt->execute();
         $result = $stmt->get_result();
@@ -214,12 +190,52 @@ class MySQL implements DbInterface
             return true;
         } else {
             $resobj = json_encode(array('status' => false, 'message' => 'Unauthorized Aceess.'), JSON_FORCE_OBJECT);
-            echo ($resobj);
+            array_push($this->res, json_decode($resobj));
             return false;
         }
     }
     public function doOperation($operation, $transop)
     {
+
+        switch ($operation['method']) {
+            case 'login':
+                $sql = "SELECT * from `" . $operation["table"] . "`" . $this->getWhere($operation);
+                $stmt = $this->conn->prepare($sql);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $row = $result->fetch_assoc();
+                if ($row) {
+                    if ($this->auth) {
+                        $tokenlifetime = date("Y-m-d H:i:s", time() + $operation["tokenlifetime"]);
+                        $token = bin2hex(random_bytes(64));
+                        $query = "insert into tokens (tokenlifetime, token) values ('$tokenlifetime','$token')";
+                        if ($this->conn->query($query) === true) {
+                            $row["token"] = $token;
+                            $row["tokenlifetime"] = $tokenlifetime;
+                        }
+                    }
+                    array_push($this->res, $row);
+                }
+                return;
+                break;
+            case 'logout':
+                if ($this->auth) {
+                    $apitoken = $this->getApiToken();
+                    if ($this->conn->query("delete from tokens where token='$apitoken'") === true) {
+                        $resobj = json_encode(array('status' => true, 'message' => 'Successfully logout out'), JSON_FORCE_OBJECT);
+                    } else {
+                        $resobj = json_encode(array('status' => true, 'message' => 'User has no life token.'), JSON_FORCE_OBJECT);
+                    }
+                    array_push($this->res, json_decode($resobj));
+                    return;
+                }
+                break;
+            default:
+                if (!$this->doAuth()) {
+                    return;
+                }
+                break;
+        }
 
         switch ($operation['method']) {
             case 'get':
@@ -327,10 +343,7 @@ class DbFactory
 
     public function __construct($config)
     {
-        header('Access-Control-Allow-Origin: *');
-        header('Access-Control-Allow-Methods: POST');
-        header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token');
-        header('Content-Type: application/json;charset=utf-8');
+
         $this->config = $config;
     }
     public function execute()
