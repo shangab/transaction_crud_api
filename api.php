@@ -1,8 +1,4 @@
 <?php
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, PUT, POST, DELETE, OPTIONS');
-header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, APITOKEN');
-header('Content-Type: application/json;charset=utf-8');
 interface DbInterface
 {
     public function connect();  // First
@@ -224,7 +220,7 @@ class MySQL implements DbInterface
                     if ($this->conn->query("delete from tokens where token='$apitoken'") === true) {
                         $resobj = json_encode(array('status' => true, 'message' => 'Successfully logout out'), JSON_FORCE_OBJECT);
                     } else {
-                        $resobj = json_encode(array('status' => true, 'message' => 'User has no life token.'), JSON_FORCE_OBJECT);
+                        $resobj = json_encode(array('status' => true, 'message' => 'Can not Successfully log out'), JSON_FORCE_OBJECT);
                     }
                     array_push($this->res, json_decode($resobj));
                     return;
@@ -343,7 +339,10 @@ class DbFactory
 
     public function __construct($config)
     {
-
+        header('Access-Control-Allow-Origin: *');
+        header('Access-Control-Allow-Methods: GET, PUT, POST, DELETE');
+        header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, APITOKEN');
+        header('Content-Type: application/json;charset=utf-8');
         $this->config = $config;
     }
     public function execute()
