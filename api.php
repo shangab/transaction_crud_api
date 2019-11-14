@@ -1,43 +1,23 @@
 <?php
-interface DbInterface
+class ConnectionTools
 {
-    public function connect();  // First
-    public function run();      // Second
-    public function doAuth();     // Third
-}
-
-class MySQL implements DbInterface
-{
-    private $conn;
-    private $res;
-    private $hostname = "";
-    private $username = "";
-    private $password = "";
-    private $database = "";
-    private $charset = "";
-    private $extraoperations = "";
-    private $auth = false;
-    public function __construct($hostname, $username, $password, $database, $charset, $extraoperations, $auth)
+    function getApiToken()
     {
-        $this->conn = mysqli_init();
-        $this->hostname = $hostname;
-        $this->username = $username;
-        $this->password = $password;
-        $this->database = $database;
-        $this->charset = $charset;
-        $this->extraoperations = $extraoperations;
-        $this->auth = $auth;
-        $this->res = array();
+        foreach (getallheaders() as $key => $value) {
+            if (strtolower($key) === 'apitoken') {
+                return $value;
+            }
+        }
+        return "";
     }
-
-    private function getWhere($operation)
+    function getWhere($operation)
     {
         if (!isset($operation["where"]) || empty($operation["where"])) {
             return "";
         }
 
         $where = $operation['where'];
-        $tokens = $this->multiexplode(array("^", "~", "(", ")"), $where);
+        $tokens = $this->multiExplode(array("^", "~", "(", ")"), $where);
         $where = str_replace("^", " AND ", $where);
         $where = str_replace("~", " OR ", $where);
         foreach ($tokens as $item) {
@@ -47,7 +27,20 @@ class MySQL implements DbInterface
         }
         return ' WHERE ' . $where;
     }
-    private function getOperand($item)
+    function getDeferedValue($res, $value)
+    {
+        if (substr($value, 0, 4) == '__OP') {
+            $index = substr($value, 6);
+            foreach ($res as $opres) {
+                if ($opres['index'] == $index) {
+                    return $opres['result'];
+                }
+            }
+        } else {
+            return $value;
+        }
+    }
+    function getOperand($item)
     {
         $field = explode(",", $item);
         switch (trim($field[1])) {
@@ -91,35 +84,50 @@ class MySQL implements DbInterface
                 break;
         }
     }
-    private function multiexplode($delimiters, $string)
+    function multiExplode($delimiters, $string)
     {
         $ready = str_replace($delimiters, $delimiters[0], $string);
         $launch = explode($delimiters[0], $ready);
         return  $launch;
     }
-    private function getDeferedValue($value)
+}
+class MySQL extends ConnectionTools
+{
+    private $conn;
+    private $res;
+    private $hostname = "";
+    private $username = "";
+    private $password = "";
+    private $database = "";
+    private $charset = "";
+    private $extraoperations = "";
+    private $auth = false;
+
+    public function __construct($hostname, $username, $password, $database, $charset, $extraoperations, $auth)
     {
-        if (substr($value, 0, 4) == '__OP') {
-            $index = substr($value, 6);
-            foreach ($this->res as $opres) {
-                if ($opres['index'] == $index) {
-                    return $opres['result'];
-                }
-            }
-        } else {
-            return $value;
-        }
+        $this->conn = mysqli_init();
+        $this->hostname = $hostname;
+        $this->username = $username;
+        $this->password = $password;
+        $this->database = $database;
+        $this->charset = $charset;
+        $this->extraoperations = $extraoperations;
+        $this->auth = $auth;
+        $this->res = array();
+        $this->connect();
     }
-    public function connect()
+    private function connect()
     {
+
         $success = mysqli_real_connect($this->conn, $this->hostname, $this->username, $this->password, $this->database, null, null, MYSQLI_CLIENT_FOUND_ROWS);
-        if (!$success || !mysqli_set_charset($this->conn, $this->charset)) {
-            return false;
+        if ($success && mysqli_set_charset($this->conn, $this->charset)) {
+            $this->cleanTokens();
+            $this->run();
         } else {
-            return true;
+            echo ("Connection failed.");
         }
     }
-    public function run()
+    private function run()
     {
         $requestmethod = $_SERVER['REQUEST_METHOD'];
         $operationsraw = trim(file_get_contents('php://input'));
@@ -138,17 +146,14 @@ class MySQL implements DbInterface
             case 'GET':
                 $op["method"] = "get";
                 $this->doOperation($op, false);
-                echo json_encode($this->res);
                 break;
             case 'DELETE':
                 $op["method"] = "delete";
                 $this->doOperation($op, false);
-                echo json_encode($this->res[0]);
                 break;
             case 'PUT':
                 $op["method"] = "put";
                 $this->doOperation($op, false);
-                echo json_encode($this->res[0]);
                 break;
             case 'POST':
                 if (substr($operationsraw, 0, 1) === "[") {
@@ -158,43 +163,18 @@ class MySQL implements DbInterface
                 } else {
                     $this->doOperation($ops, false);
                 }
-                echo json_encode($this->res);
                 break;
         }
+        echo json_encode($this->res);
         $this->conn->close();
     }
-    private function getApiToken()
-    {
-        foreach (getallheaders() as $key => $value) {
-            if ($key == 'APITOKEN') {
-                return $value;
-            }
-        }
-        return "";
-    }
-    public function doAuth()
-    {
-        if (!$this->auth) {
-            return true;
-        }
-        $apitoken = $this->getApiToken();
-        $stmt = $this->conn->prepare("select * from tokens where token ='$apitoken'");
-        $stmt->execute();
-        $result = $stmt->get_result();
-        $row = $result->fetch_assoc();
-        if ($row) {
-            return true;
-        } else {
-            $resobj = json_encode(array('status' => false, 'message' => 'Unauthorized Aceess.'), JSON_FORCE_OBJECT);
-            array_push($this->res, json_decode($resobj));
-            return false;
-        }
-    }
+
     public function doOperation($operation, $transop)
     {
-
         switch ($operation['method']) {
             case 'login':
+                $previoustoken = $this->getApiToken();
+                $this->conn->query("delete from tokens where token='$previoustoken'");
                 $sql = "SELECT * from `" . $operation["table"] . "`" . $this->getWhere($operation);
                 $stmt = $this->conn->prepare($sql);
                 $stmt->execute();
@@ -227,12 +207,12 @@ class MySQL implements DbInterface
                 }
                 break;
             default:
-                if (!$this->doAuth()) {
-                    return;
-                }
+
                 break;
         }
-
+        if (!$this->doAuth()) {
+            return;
+        }
         switch ($operation['method']) {
             case 'get':
                 $fields = isset($operation["fields"]) && !empty($operation["fields"]) ? $operation["fields"] : "*";
@@ -274,12 +254,11 @@ class MySQL implements DbInterface
                 $values = "";
                 foreach ($operation['body'] as $key => $value) {
                     $keys = $keys . "`" . $key . "`,";
-                    $values = $values . "'" . $this->getDeferedValue($value) . "',";
+                    $values = $values . "'" . $this->getDeferedValue($this->res, $value) . "',";
                 }
                 $keys = substr($keys, 0, strlen($keys) - 1);
                 $values = substr($values, 0, strlen($values) - 1);
                 $sql = $sql . ' (' . $keys . ') VALUES (' . $values . ')';
-                // die ($sql);
                 if ($this->conn->query($sql) === true) {
                     $postres = $this->conn->insert_id;
                 } else {
@@ -294,7 +273,7 @@ class MySQL implements DbInterface
             case 'put':
                 $sql = "UPDATE `" . $operation['table'] . "` SET ";
                 foreach ($operation['body'] as $key => $value) {
-                    $sql = $sql . $key . " = '" . $this->getDeferedValue($value) . "',";
+                    $sql = $sql . $key . " = '" . $this->getDeferedValue($this->res, $value) . "',";
                 }
                 $where = $this->getWhere($operation);
                 $sql = substr($sql, 0, strlen($sql) - 1) . $where;
@@ -331,17 +310,42 @@ class MySQL implements DbInterface
             include $this->extraoperations;
         }
     }
+    private function cleanTokens()
+    {
+        if ($this->auth) {
+            $now =  date("Y-m-d H:i:s", time());;
+            $sql = "DELETE from `tokens` where tokenlifetime <='$now'";
+            $this->conn->query($sql);
+        }
+    }
+    private function doAuth()
+    {
+        if (!$this->auth) {
+            return true;
+        }
+        $apitoken = $this->getApiToken();
+        $stmt = $this->conn->prepare("select * from tokens where token ='$apitoken'");
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            return true;
+        } else {
+            $resobj = json_encode(array('status' => false, 'message' => 'Unauthorized Aceess.'), JSON_FORCE_OBJECT);
+            array_push($this->res, json_decode($resobj));
+            return false;
+        }
+    }
 }
-
 class DbFactory
 {
     private $config;
 
     public function __construct($config)
     {
+        header('Access-Control-Allow-Headers: Content-Type, ApiToken');
         header('Access-Control-Allow-Origin: *');
         header('Access-Control-Allow-Methods: GET, PUT, POST, DELETE');
-        header('Access-Control-Allow-Headers: Origin, Content-Type, X-Auth-Token, APITOKEN');
         header('Content-Type: application/json;charset=utf-8');
         $this->config = $config;
     }
@@ -350,12 +354,7 @@ class DbFactory
         extract($this->config);
         switch ($dbengine) {
             case 'MySQL':
-                $mysql = new MySQL($hostname, $username, $password, $database, $charset, $extraoperations, $auth);
-                if ($mysql->connect()) {
-                    $mysql->run();
-                } else {
-                    echo ("Connection to $hostname database $database failed. Invsales Web serivice");
-                }
+                new MySQL($hostname, $username, $password, $database, $charset, $extraoperations, $auth);
                 break;
             default:
                 break;
